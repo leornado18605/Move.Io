@@ -55,4 +55,12 @@ public class PlayerAttackTrigger : MonoBehaviour
             StartCoroutine(HandleAttack(aiPosition));
         }
     }
+
+    public void CancelAttack()
+    {
+        StopAllCoroutines();
+        if (targetMarker != null)
+            targetMarker.SetActive(false);
+    }
+
 }

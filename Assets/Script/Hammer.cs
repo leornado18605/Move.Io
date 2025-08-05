@@ -1,11 +1,16 @@
 ﻿using UnityEngine;
 
-[RequireComponent(typeof(Rigidbody))]
 public class HammerSpin : MonoBehaviour
 {
     [SerializeField] private float spinSpeed = 20f;
 
     private Rigidbody rb;
+    private GameObject owner;
+
+    public void SetOwner(GameObject ownerObj)
+    {
+        owner = ownerObj;
+    }
 
     private void Awake()
     {
@@ -19,15 +24,21 @@ public class HammerSpin : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-
-        if (other.CompareTag("AI"))
+        if (other.gameObject == owner) return;
+        if (other.CompareTag("AI") && other.gameObject != owner)
         {
             AIFollowPlayer ai = other.GetComponent<AIFollowPlayer>();
             if (ai != null)
             {
-                ai.Die();
+                ai.Die(owner);
             }
+
             gameObject.SetActive(false);
         }
+    }
+
+    private void OnDisable()
+    {
+        owner = null; // reset
     }
 }

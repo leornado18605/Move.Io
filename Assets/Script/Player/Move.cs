@@ -15,10 +15,13 @@ public class MoveScript : MonoBehaviour
     [SerializeField] private CharacterController controller;
 
     private Vector3 velocity;
+    
     private bool wasMoving = false;
 
     //Attack
     [SerializeField] private PlayerAttackTrigger playerAttack;
+    private bool isAttacking = false;
+
     private void Awake()
     {
         controller.stepOffset = 0.4f;
@@ -31,8 +34,10 @@ public class MoveScript : MonoBehaviour
         {
             wasMoving = false;
             if (animator) animator.SetBool("Running", false);
-            HandleDetectionAndAttack();
+            if(!isAttacking)
+                HandleDetectionAndAttack();
         }
+
     }
 
     void HandleMovement()

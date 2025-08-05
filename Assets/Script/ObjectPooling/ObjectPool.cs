@@ -16,6 +16,8 @@ public class AIPoolManager : MonoBehaviour
     [SerializeField] private int hammerPoolSize = 5;
 
     private Dictionary<string, List<GameObject>> aiPools = new Dictionary<string, List<GameObject>>();
+    private List<Vector3> usedSpawnPositions = new List<Vector3>();
+
     private List<GameObject> hammerPool = new List<GameObject>();
 
     private void Awake()
@@ -48,30 +50,62 @@ public class AIPoolManager : MonoBehaviour
 
     private IEnumerator SpawnAIInAreas()
     {
+        usedSpawnPositions.Clear();
+
         foreach (Transform area in spawnAreas)
         {
             for (int i = 0; i < aiPerType; i++)
             {
                 GameObject prefab = aiPrefabs[Random.Range(0, aiPrefabs.Count)];
-                Vector3 pos = GetRandomPointInArea(area);
+                Vector3 pos = GetValidSpawnPoint(area, 15f);
 
                 GameObject ai = GetAIFromPool(prefab.name);
                 if (ai != null)
                 {
                     ai.transform.position = pos;
                     ai.SetActive(true);
+
+                    GameManager.instance?.RegisterAI();
                 }
 
                 yield return null;
             }
         }
     }
-
-    private Vector3 GetRandomPointInArea(Transform area)
+    private Vector3 GetValidSpawnPoint(Transform area, float minDistance, int maxAttempts = 20)
     {
         MeshRenderer r = area.GetComponent<MeshRenderer>();
         Bounds b = r.bounds;
-        return new Vector3(Random.Range(b.min.x, b.max.x), b.max.y, Random.Range(b.min.z, b.max.z));
+
+        for (int i = 0; i < maxAttempts; i++)
+        {
+            Vector3 pos = new Vector3(
+                Random.Range(b.min.x, b.max.x),
+                b.max.y,
+                Random.Range(b.min.z, b.max.z)
+            );
+
+            bool isFarEnough = true;
+            foreach (var usedPos in usedSpawnPositions)
+            {
+                if (Vector3.Distance(usedPos, pos) < minDistance)
+                {
+                    isFarEnough = false;
+                    break;
+                }
+            }
+
+            if (isFarEnough)
+            {
+                usedSpawnPositions.Add(pos);
+                return pos;
+            }
+        }
+        return new Vector3(
+            Random.Range(b.min.x, b.max.x),
+            b.max.y,
+            Random.Range(b.min.z, b.max.z)
+        );
     }
 
     public GameObject GetAIFromPool(string prefabName)
@@ -93,23 +127,21 @@ public class AIPoolManager : MonoBehaviour
         Animator anim = ai.GetComponent<Animator>();
         if (anim != null)
         {
-            anim.Rebind(); 
-            anim.Update(0f); 
+            anim.Rebind();
+            anim.Update(0f);
         }
         ai.SetActive(false);
     }
 
-    public void LaunchHammer(Vector3 start, Vector3 target, float speed = 20f, float time = 0.1f)
+    public void LaunchHammer(Vector3 start, Vector3 target, float speed = 20f, float time = 0.1f, GameObject owner = null)
     {
         GameObject hammer = GetHammer();
-        if (hammer == null)
-        {
-            return;
-        }
+        if (hammer == null) return;
 
         hammer.transform.position = start;
         hammer.SetActive(true);
         hammer.transform.SetParent(null);
+
         Rigidbody rb = hammer.GetComponent<Rigidbody>();
         rb.isKinematic = false;
         rb.velocity = Vector3.zero;
@@ -120,10 +152,15 @@ public class AIPoolManager : MonoBehaviour
 
         rb.AddForce(direction * speed, ForceMode.VelocityChange);
 
-        Debug.DrawRay(start, direction * 5f, Color.yellow, 2f);
+        HammerSpin spin = hammer.GetComponent<HammerSpin>();
+        if (spin != null)
+        {
+            spin.SetOwner(owner);
+        }
 
         StartCoroutine(ReturnAfterDelay(hammer, time));
     }
+
 
 
     private GameObject GetHammer()
