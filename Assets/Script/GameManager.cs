@@ -2,7 +2,6 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using static UnityEditor.Experimental.GraphView.GraphView;
 
 public class GameManager : MonoBehaviour
 {
@@ -20,12 +19,41 @@ public class GameManager : MonoBehaviour
 
     public LeaderboardManager leaderboardManager;
     public List<PlayerData> players = new List<PlayerData>();
+
+    public PlayerController playerController;
+    [SerializeField] private GameOverUI gameOverUI;
     private void Update()
     {
 
         if (Time.frameCount % 60 == 0)
         {
+            UpdatePlayersList();
             leaderboardManager.UpdateLeaderboard(players);
+        }
+    }
+    private void UpdatePlayersList()
+    {
+        players.Clear();
+
+        // Thêm người chơi
+        if (playerController != null)
+        {
+            players.Add(new PlayerData(
+                "Player",
+                cachedScoreManager != null ? cachedScoreManager.GetScore() : 0
+            ));
+        }
+
+        var allAI = FindObjectsOfType<AIFollowPlayer>();
+        foreach (var ai in allAI)
+        {
+            if (!ai.IsDead())
+            {
+                players.Add(new PlayerData(
+                    ai.GetAIName(), 
+                    ai.GetScore()   
+                ));
+            }
         }
     }
     private void Awake()
@@ -124,6 +152,6 @@ public class GameManager : MonoBehaviour
 
     public void PlayerDied()
     {
-        SceneManager.LoadScene(GameConstants.SCENE_LOSE);
+        gameOverUI.ShowGameOver();
     }
 }
