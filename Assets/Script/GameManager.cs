@@ -1,6 +1,8 @@
-﻿using TMPro;
+﻿using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using static UnityEditor.Experimental.GraphView.GraphView;
 
 public class GameManager : MonoBehaviour
 {
@@ -8,7 +10,7 @@ public class GameManager : MonoBehaviour
 
     public Animator animator;
     [SerializeField] private TMP_Text aliveText;
-    [SerializeField] private PlayerHealth playerHealth;
+    [SerializeField] private PlayerController playerHealth;
 
     private int totalAlive = 1;
     private int aiDeadCount = 0;
@@ -16,6 +18,16 @@ public class GameManager : MonoBehaviour
     // Cache components
     private ScoreManager cachedScoreManager;
 
+    public LeaderboardManager leaderboardManager;
+    public List<PlayerData> players = new List<PlayerData>();
+    private void Update()
+    {
+
+        if (Time.frameCount % 60 == 0)
+        {
+            leaderboardManager.UpdateLeaderboard(players);
+        }
+    }
     private void Awake()
     {
         if (instance != null && instance != this)

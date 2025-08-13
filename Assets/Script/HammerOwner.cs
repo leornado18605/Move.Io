@@ -20,7 +20,7 @@ public class HammerOwner : MonoBehaviour
                 }
                 else if (other.CompareTag("Player"))
                 {
-                    PlayerHealth player = other.GetComponent<PlayerHealth>();
+                    PlayerController player = other.GetComponent<PlayerController>();
                     if (player != null)
                     {
                         player.Die();

@@ -1,25 +1,33 @@
 ﻿using UnityEngine;
+using DG.Tweening; // Thêm DOTween
 
 public class HammerSpin : MonoBehaviour
 {
-    [SerializeField] private float spinSpeed = 20f;
-
-    private Rigidbody rb;
+    [SerializeField] private float spinSpeed = 360f;
     private GameObject owner;
-
-    // Cache components
     private HammerOwner cachedHammerOwner;
+    private Tween spinTween;
 
     public void SetOwner(GameObject ownerObj) => owner = ownerObj;
-
-    private void Awake() => rb = GetComponent<Rigidbody>();
 
     private void Start()
     {
         cachedHammerOwner = GetComponent<HammerOwner>();
     }
 
-    private void OnEnable() => rb.angularVelocity = transform.forward * spinSpeed;
+    private void OnEnable()
+    {
+        spinTween = transform
+            .DORotate(new Vector3(0, 360, 0), 1f / (spinSpeed / 360f), RotateMode.FastBeyond360)
+            .SetEase(Ease.Linear)
+            .SetLoops(-1, LoopType.Restart);
+    }
+
+    private void OnDisable()
+    {
+        owner = null;
+        spinTween?.Kill(); 
+    }
 
     private void OnTriggerEnter(Collider other)
     {
@@ -67,12 +75,12 @@ public class HammerSpin : MonoBehaviour
             return true;
         }
 
-        return true; // Still disable hammer even if AI is dead
+        return true;
     }
 
     private bool ProcessPlayerCollision(Collider other, GameObject effectiveOwner)
     {
-        PlayerHealth playerHealth = other.GetComponent<PlayerHealth>();
+        PlayerController playerHealth = other.GetComponent<PlayerController>();
         if (playerHealth != null && !playerHealth.isDead)
         {
             playerHealth.TakeDamage(1);
@@ -80,8 +88,4 @@ public class HammerSpin : MonoBehaviour
 
         return true;
     }
-
-    private void OnDisable() => owner = null;
-
-
 }

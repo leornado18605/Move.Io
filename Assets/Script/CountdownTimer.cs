@@ -1,6 +1,7 @@
-﻿using UnityEngine;
-using TMPro;
+﻿using TMPro;
+using UnityEngine;
 using UnityEngine.SceneManagement;
+using static UnityEditor.Experimental.GraphView.GraphView;
 
 public class CountdownTimer : MonoBehaviour
 {
@@ -57,4 +58,12 @@ public class CountdownTimer : MonoBehaviour
     {
         SceneManager.LoadScene(GameConstants.SCENE_LOSE);
     }
+
+    //private void OnTimerEnd()
+    //{
+    //    PlayerData winner = players.OrderByDescending(p => p.score).First();
+    //    Debug.Log("Winner: " + winner.name);
+
+    //    SceneManager.LoadScene(GameConstants.SCENE_WIN);
+    //}
 }

@@ -96,7 +96,7 @@ public class AIAttackTrigger : MonoBehaviour
             hammerModel.SetActive(true);
         }
 
-        AIPoolManager.Instance.LaunchHammer(handTransform.position, targetPos, hammerSpeed, GameConstants.ATTACK_RESET_DELAY, gameObject);
+        AIPoolManager.Instance.LaunchHammer(handTransform, targetPos, hammerSpeed, GameConstants.ATTACK_RESET_DELAY, gameObject);
 
         yield return null;
 

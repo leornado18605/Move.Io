@@ -23,15 +23,21 @@ public class AIPoolManager : MonoBehaviour
     [Header("NameTag Settings")]
     [SerializeField] private GameObject aiNameTagPrefab;
 
+    private List<int> availableNameNumbers = new List<int>();
+    private readonly List<GameObject> nameTagPool = new();
+    [SerializeField] private int nameTagPoolSize = 50;
     private void Awake()
     {
         Instance = this;
         CreateAIPools();
         CreateHammerPool();
+        CreateNameTagPool();
+        InitAvailableNames();
     }
 
     private void Start()
     {
+
         StartCoroutine(SpawnAIInAreas());
     }
 
@@ -59,7 +65,15 @@ public class AIPoolManager : MonoBehaviour
             hammerPool.Add(hammer);
         }
     }
-
+    private void CreateNameTagPool()
+    {
+        for (int i = 0; i < nameTagPoolSize; i++)
+        {
+            GameObject nameTag = Instantiate(aiNameTagPrefab, transform);
+            nameTag.SetActive(false);
+            nameTagPool.Add(nameTag);
+        }
+    }
     private IEnumerator SpawnAIInAreas()
     {
         usedSpawnPositions.Clear();
@@ -76,7 +90,8 @@ public class AIPoolManager : MonoBehaviour
 
                 ai.transform.position = spawnPos;
                 ai.SetActive(true);
-                GameObject nameTag = Instantiate(aiNameTagPrefab, Vector3.zero, Quaternion.identity);
+                GameObject nameTag = GetNameTagFromPool();
+                nameTag.SetActive(true);
                 UIFollowHead followHead = nameTag.GetComponent<UIFollowHead>();
                 if (followHead != null)
                 {
@@ -89,9 +104,10 @@ public class AIPoolManager : MonoBehaviour
                 AINameTag tagScript = nameTag.GetComponent<AINameTag>();
                 if (tagScript != null)
                 {
-                    string aiName = "AI_" + Random.Range(100, 999);
+                    string aiName = "AI_" + GetRandomUniqueNameNumber();
                     tagScript.SetName(aiName);
                     tagScript.SetScore(0);
+                    Debug.Log($"Spawned AI with name: {aiName}, initial score: 0");
                 }
 
                 AIFollowPlayer aiFollow = ai.GetComponent<AIFollowPlayer>();
@@ -151,9 +167,23 @@ public class AIPoolManager : MonoBehaviour
         for (int i = 0; i < pool.Count; i++)
         {
             if (!pool[i].activeInHierarchy)
-                return pool[i];
+            {
+                GameObject ai = pool[i];
+                // Reset thêm trạng thái nếu cần
+                AIFollowPlayer aiFollow = ai.GetComponent<AIFollowPlayer>();
+                if (aiFollow != null)
+                {
+                    aiFollow.killCount = 0;
+                    ai.transform.localScale = Vector3.one;
+                    ai.tag = "AI";
+                    Collider collider = ai.GetComponent<Collider>();
+                    if (collider != null) collider.enabled = true;
+                    AudioListener listener = ai.GetComponent<AudioListener>();
+                    if (listener != null) listener.enabled = false;
+                }
+                return ai;
+            }
         }
-
         return null;
     }
 
@@ -162,8 +192,12 @@ public class AIPoolManager : MonoBehaviour
         AIFollowPlayer aiFollow = ai.GetComponent<AIFollowPlayer>();
         if (aiFollow != null && aiFollow.nameTag != null)
         {
-            aiFollow.OnKillCountChanged -= aiFollow.nameTag.GetComponent<AINameTag>().SetScore;
-            Destroy(aiFollow.nameTag);
+            AINameTag tagScript = aiFollow.nameTag.GetComponent<AINameTag>();
+            if (tagScript != null)
+            {
+                aiFollow.OnKillCountChanged -= tagScript.SetScore;
+            }
+            ReturnNameTagToPool(aiFollow.nameTag);
             aiFollow.nameTag = null;
         }
 
@@ -176,30 +210,57 @@ public class AIPoolManager : MonoBehaviour
 
         ai.SetActive(false);
     }
-
-    public void LaunchHammer(Vector3 start, Vector3 target, float speed = 20f, float time = 0.3f, GameObject owner = null)
+    private GameObject GetNameTagFromPool()
+    {
+        foreach (GameObject nameTag in nameTagPool)
+        {
+            if (!nameTag.activeInHierarchy)
+            {
+                AINameTag tagScript = nameTag.GetComponent<AINameTag>();
+                if (tagScript != null)
+                {
+                    tagScript.SetName(""); // Reset tên
+                    tagScript.SetScore(0); // Reset điểm
+                }
+                return nameTag;
+            }
+        }
+        // Nếu pool hết, tạo mới
+        GameObject newNameTag = Instantiate(aiNameTagPrefab, transform);
+        newNameTag.SetActive(false);
+        nameTagPool.Add(newNameTag);
+        Debug.LogWarning("NameTag pool ran out, created new nameTag.");
+        return newNameTag;
+    }
+    private void ReturnNameTagToPool(GameObject nameTag)
+    {
+        AINameTag tagScript = nameTag.GetComponent<AINameTag>();
+        if (tagScript != null)
+        {
+            tagScript.SetName(""); // Reset tên
+            tagScript.SetScore(0); // Reset điểm
+        }
+        nameTag.SetActive(false);
+    }
+    public void LaunchHammer(Transform spawnPoint, Vector3 target, float speed = 20f, float time = 0.3f, GameObject owner = null)
     {
         GameObject hammer = GetHammer();
         if (hammer == null) return;
 
-        hammer.transform.position = start;
+        // Set vị trí + hướng ban đầu từ spawnPoint
+        hammer.transform.SetPositionAndRotation(spawnPoint.position, spawnPoint.rotation);
         hammer.transform.SetParent(null);
         hammer.SetActive(true);
 
-        HammerOwner hammerOwner = hammer.GetComponent<HammerOwner>();
-        if (hammerOwner == null)
-        {
-            hammerOwner = hammer.AddComponent<HammerOwner>();
-        }
-        hammerOwner.owner = owner ?? gameObject; 
+        HammerOwner hammerOwner = hammer.GetComponent<HammerOwner>() ?? hammer.AddComponent<HammerOwner>();
+        hammerOwner.owner = owner ?? gameObject;
 
         HammerSpin spin = hammer.GetComponent<HammerSpin>();
         if (spin != null)
         {
-            spin.SetOwner(hammerOwner.owner); 
+            spin.SetOwner(hammerOwner.owner);
         }
 
- 
         Rigidbody rb = hammer.GetComponent<Rigidbody>();
         if (rb != null)
         {
@@ -208,18 +269,16 @@ public class AIPoolManager : MonoBehaviour
             rb.angularVelocity = Vector3.zero;
 
             Vector3 flatTarget = target;
-            flatTarget.y = start.y;
-            Vector3 direction = (flatTarget - start).normalized;
+            flatTarget.y = spawnPoint.position.y;
+            Vector3 direction = (flatTarget - spawnPoint.position).normalized;
 
             rb.AddForce(direction * speed, ForceMode.VelocityChange);
         }
 
-        float flightTime = Vector3.Distance(start, target) / speed;
+        float flightTime = Vector3.Distance(spawnPoint.position, target) / speed;
         StartCoroutine(ReturnAfterDelay(hammer, flightTime + 0.5f));
-
-        Debug.Log($"Launched hammer from {(owner != null ? owner.name : "unknown")}. " +
-                  $"Owner tag: {(owner != null ? owner.tag : "no tag")}");
     }
+
 
     private IEnumerator ReturnAfterDelay(GameObject hammer, float delay)
     {
@@ -255,4 +314,25 @@ public class AIPoolManager : MonoBehaviour
         return null;
     }
 
+    private void InitAvailableNames()
+    {
+        availableNameNumbers.Clear();
+        for (int i = 1; i <= 50; i++)
+        {
+            availableNameNumbers.Add(i);
+        }
+    }
+
+    private int GetRandomUniqueNameNumber()
+    {
+        if (availableNameNumbers.Count == 0)
+        {
+            InitAvailableNames();
+        }
+
+        int index = Random.Range(0, availableNameNumbers.Count);
+        int number = availableNameNumbers[index];
+        availableNameNumbers.RemoveAt(index);
+        return number;
+    }
 }

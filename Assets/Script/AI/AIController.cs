@@ -36,14 +36,11 @@ public class AIFollowPlayer : MonoBehaviour
 
     [SerializeField] private GameObject hammerPrefab;
     [SerializeField] private Transform hammerSpawnPoint;
-    private int killCount = 0;
+    public int killCount = 0;
 
     [SerializeField] private ScoreManager scoreTracker;
 
     private AIAttackTrigger attackTrigger;
-
-    //private int score = 0;
-    [SerializeField] private ScoreUI scoreUI;
 
     [Header("Indicator Settings")]
     public Color indicatorColor = Color.red;
@@ -52,8 +49,10 @@ public class AIFollowPlayer : MonoBehaviour
     public GameObject nameTag;
 
     // Cache components
-    private PlayerHealth cachedPlayerHealth;
+    private PlayerController cachedPlayerHealth;
     private AIFollowPlayer cachedAI;
+
+    [SerializeField] private string aiName = "AI";
 
     void Start()
     {
@@ -69,6 +68,12 @@ public class AIFollowPlayer : MonoBehaviour
         animator.applyRootMotion = false;
         animator.speed = 1f;
         SetState(AIState.Idle);
+        if (string.IsNullOrEmpty(aiName))
+            aiName = gameObject.name;
+        if (LeaderboardManager.Instance != null)
+        {
+            LeaderboardManager.Instance.UpdateScore(aiName, 0);
+        }
     }
 
     void Update()
@@ -99,7 +104,7 @@ public class AIFollowPlayer : MonoBehaviour
     {
         targetSwitchTimer += Time.deltaTime;
 
-        if (ShouldSwitchTarget())
+        if (currentTarget == null || targetSwitchTimer >= targetSwitchCooldown)
         {
             currentTarget = FindTarget();
             targetSwitchTimer = 0f;
@@ -107,30 +112,10 @@ public class AIFollowPlayer : MonoBehaviour
             cachedPlayerHealth = null;
         }
 
-        CheckPlayerTarget();
-    }
-
-    private bool ShouldSwitchTarget()
-    {
-        if (currentTarget == null || targetSwitchTimer >= targetSwitchCooldown)
-        {
-            if (currentTarget == null) return true;
-
-            if (cachedAI != null && cachedAI.currentState == AIState.Dead) return true;
-
-            float sqrDistance = (transform.position - currentTarget.position).sqrMagnitude;
-            if (sqrDistance > GameConstants.AI_MAX_DISTANCE * GameConstants.AI_MAX_DISTANCE) return true;
-        }
-
-        return false;
-    }
-
-    private void CheckPlayerTarget()
-    {
         if (currentTarget != null && currentTarget.CompareTag("Player"))
         {
             if (cachedPlayerHealth == null)
-                cachedPlayerHealth = currentTarget.GetComponent<PlayerHealth>();
+                cachedPlayerHealth = currentTarget.GetComponent<PlayerController>();
 
             if (cachedPlayerHealth != null && cachedPlayerHealth.isDead)
             {
@@ -141,6 +126,7 @@ public class AIFollowPlayer : MonoBehaviour
         }
     }
 
+    
     private void ProcessCurrentState()
     {
         switch (currentState)
@@ -272,37 +258,39 @@ public class AIFollowPlayer : MonoBehaviour
     private Transform FindTarget()
     {
         potentialTargets.Clear();
+        Transform playerTarget = null;
+
         Collider[] hits = Physics.OverlapSphere(transform.position, GameConstants.AI_DETECTION_RANGE);
 
-        // Prioritize Player
-        for (int i = 0; i < hits.Length; i++)
+        foreach (var hit in hits)
         {
-            if (hits[i].transform == transform) continue;
+            if (hit.transform == transform) continue;
 
-            if (hits[i].CompareTag("Player"))
+            if (hit.CompareTag("Player"))
             {
-                PlayerHealth playerHealth = hits[i].GetComponent<PlayerHealth>();
-                if (playerHealth != null && !playerHealth.isDead)
+                PlayerController ph = hit.GetComponent<PlayerController>();
+                if (ph != null && !ph.isDead)
                 {
-                    return hits[i].transform;
+                    float distToPlayer = Vector3.Distance(transform.position, hit.transform.position);
+                    if (distToPlayer <= attackRange)
+                    {
+                        playerTarget = hit.transform;
+                    }
                 }
+                continue;
             }
-        }
 
-        // Find AI targets
-        for (int i = 0; i < hits.Length; i++)
-        {
-            if (hits[i].transform == transform) continue;
-
-            if (hits[i].CompareTag("AI"))
+            if (hit.CompareTag("AI"))
             {
-                AIFollowPlayer ai = hits[i].GetComponent<AIFollowPlayer>();
+                AIFollowPlayer ai = hit.GetComponent<AIFollowPlayer>();
                 if (ai != null && ai.currentState != AIState.Dead)
                 {
-                    potentialTargets.Add(hits[i].transform);
+                    potentialTargets.Add(hit.transform);
                 }
             }
         }
+
+        if (playerTarget != null) return playerTarget;
 
         if (potentialTargets.Count > 0)
         {
@@ -347,47 +335,57 @@ public class AIFollowPlayer : MonoBehaviour
         GetComponent<Collider>().enabled = false;
         GameManager.instance?.AIDied(killer);
 
-        StartCoroutine(WaitAndReturnToPool(GameConstants.HAMMER_RETURN_DELAY * 4)); // 2f
+        StartCoroutine(WaitAndReturnToPool()); // 2f
     }
-
-    //public void AddScore(int amount)
-    //{
-    //    score += amount;
-
-    //    if (nameTag != null)
-    //    {
-    //        AINameTag tag = nameTag.GetComponent<AINameTag>();
-    //        if (tag != null)
-    //        {
-    //            tag.SetScore(score);
-    //        }
-    //    }
-    //}
 
     public void IncreaseKill()
     {
         killCount++;
+        Debug.Log($"AI {gameObject.name} kill count updated to: {killCount}");
         OnKillCountChanged?.Invoke(killCount);
-
+        if (LeaderboardManager.Instance != null)
+        {
+            LeaderboardManager.Instance.UpdateScore(aiName, killCount);
+        }
         transform.localScale += Vector3.one * GameConstants.KILL_SCALE_AMOUNT;
 
     }
 
-    private IEnumerator WaitAndReturnToPool(float delay)
+    private IEnumerator WaitAndReturnToPool()
     {
-        yield return new WaitForSeconds(delay);
+        AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+        float deathAnimationLength = 0f;
+        if (stateInfo.IsName(GameConstants.ANIM_DEATH.ToString()))
+        {
+            deathAnimationLength = stateInfo.length / animator.speed;
+        }
+
+        // Wait for the death animation to complete plus 1 second
+        yield return new WaitForSeconds(deathAnimationLength + 1f);
+        Debug.Log($"Reset AI: killCount={killCount}, scale={transform.localScale}, tag={gameObject.tag}, collider enabled={GetComponent<Collider>().enabled}");
+        // Deactivate the GameObject
+        gameObject.SetActive(false);
 
         // Reset state before pooling
         currentTarget = null;
         currentState = AIState.Idle;
         cachedAI = null;
         cachedPlayerHealth = null;
+        cachedPlayerHealth = null;
+        killCount = 0;
+        transform.localScale = Vector3.one;
+        gameObject.tag = "AI";
+        Collider collider = GetComponent<Collider>();
+        if (collider != null) collider.enabled = true;
 
         animator.SetBool(GameConstants.ANIM_RUNNING, false);
         animator.SetBool(GameConstants.ANIM_ATTACK, false);
+        animator.SetBool(GameConstants.ANIM_DEATH, false);
 
         agent.enabled = true;
         agent.isStopped = false;
+        gameObject.tag = "AI";
+        GetComponent<Collider>().enabled = true;
 
         AIPoolManager.Instance.ReturnAI(gameObject);
     }

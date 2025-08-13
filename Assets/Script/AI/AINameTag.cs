@@ -13,6 +13,7 @@ public class AINameTag : MonoBehaviour
         if (nameText != null)
         {
             nameText.text = name;
+            Debug.Log($"Set AINameTag name: {name}");
         }
     }
 
@@ -22,12 +23,22 @@ public class AINameTag : MonoBehaviour
         if (scoreText != null)
         {
             scoreText.text = score.ToString();
+            Debug.Log($"Set AINameTag {nameText.text} score: {score}");
+        }
+
+        if (LeaderboardManager.Instance != null)
+        {
+            LeaderboardManager.Instance.UpdateScore(nameText.text, score);
         }
     }
 
     public void AddScore(int amount)
     {
         score += amount;
+        if (LeaderboardManager.Instance != null)
+        {
+            LeaderboardManager.Instance.UpdateScore(nameText.text, score);
+        }
     }
 
     public int GetScore()

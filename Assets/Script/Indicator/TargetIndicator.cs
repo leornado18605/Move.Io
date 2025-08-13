@@ -2,6 +2,8 @@
 
 public class TargetIndicator : MonoBehaviour
 {
+
+    [SerializeField] private GameObject indicatorUI; // Gắn prefab UI vào đây trong Inspector
     [Header("References")]
     [SerializeField] private Transform target;
     [SerializeField] private RectTransform indicator;
@@ -130,4 +132,5 @@ public class TargetIndicator : MonoBehaviour
         target = newTarget;
         gameObject.SetActive(newTarget != null);
     }
+
 }
